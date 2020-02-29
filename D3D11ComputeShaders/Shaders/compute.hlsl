@@ -3,6 +3,12 @@
 #define HEIGHT 640
 RWTexture2D<float4> sampleTexture : register(u0);
 
+cbuffer ComputeUploadInformation : register(b0)
+{
+	float4 mouse;
+	float time;
+}
+
 float sphereSDF(float3 pos, float rad)
 {
 	return length(pos) - rad;
@@ -23,7 +29,7 @@ float map(float3 pos)
 {
 	float sdfPlane = sdPlane(pos, normalize(float4(0, 1, 0, 1)));
 	float sphere0 = sphereSDF(pos, 1.0f);
-	float sphere1 = sphereSDF(translatePosition(pos, float3(1.5, 0, 0)), 0.5f);
+	float sphere1 = sphereSDF(translatePosition(pos, float3(1.5, sin(time), 0)), 0.5f);
 	return min(sdfPlane, min(sphere0, sphere1));
 }
 
@@ -36,12 +42,25 @@ float3 estimateNormal(float3 pos)
 	return normalize(res);
 }
 
+float shadow(in float3 ro, in float3 rd, float mint, float maxt)
+{
+	for (float t = mint; t < maxt; )
+	{
+		float h = map(ro + rd * t);
+		if (h < 0.000005)
+			return 0.0;
+		t += h;
+	}
+	return 1.0;
+}
+
 float3 calculateLighting(float3 pos, float3 eye, float3 albedo)
 {
 	float3 norm = estimateNormal(pos);
 	float3 ambient = 0.1f;
-
-	float3 lightDir = normalize(float3(0, 50, 50) - pos);
+	float3 lightDirection = float3(0, -50, -50);
+	float3 lightDir = normalize(-lightDirection);
+	//float3 lightDir = normalize(float3(0, 50, 50) - pos);
 	float3 diff = max(dot(norm, lightDir), 0.0f);
 
 	float3 viewDir = normalize(eye - pos);
@@ -49,7 +68,9 @@ float3 calculateLighting(float3 pos, float3 eye, float3 albedo)
 
 	float3 spec = pow(max(dot(norm, halfwayDir), 0.0f), 64);
 
-	return (ambient + diff+spec) * albedo;
+	//float shadowIntensity = shadow(float3(0, 50, 50), normalize(float3(0,-50,-50)), 1.0f, distance(float3(0, 50, 50), pos));
+	float shadowIntensity = shadow(-lightDirection, normalize(lightDirection+pos), 0.0f, distance(-lightDirection,pos));
+	return (ambient + (diff+spec) * shadowIntensity) * albedo;
 }
 
 float3 rayDirection(float fieldOfView, float2 size, float2 fragCoord)
@@ -78,7 +99,8 @@ void main(uint3 threadID : SV_DispatchThreadID)
 	float3 origin = float3(0, 0, 5);
 	float3 ray = origin;
 	float3 dir = rayDirection(90.f, float2(WIDTH, HEIGHT), float2(threadID.xy));
-	float4x4 viewToWorld = viewMatrix(origin, origin + float3(0, 0, -1), float3(0, 1, 0));
+	float3 target = normalize(float3(cos(mouse.y / 50.f) * cos(mouse.x / 50.f), sin(mouse.y / 50.f), cos(mouse.y / 50.f) * sin(mouse.x / 50.f)));
+	float4x4 viewToWorld = viewMatrix(origin, origin + target, float3(0, 1, 0));
 	dir = mul(float4(dir, 1.f),viewToWorld).xyz;
 	for (int i = 0; i < 1000; i++)
 	{

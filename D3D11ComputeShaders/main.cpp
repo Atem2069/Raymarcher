@@ -11,8 +11,19 @@
 #include <dxgi.h>
 #include <d3dcompiler.h>
 
+struct vec4
+{
+	vec4() {}
+	vec4(float x, float y, float z, float w) : x(x), y(y), z(z) {}
+	float x;
+	float y;
+	float z;
+	float w;
+};
+
 struct vec3
 {
+	vec3() {}
 	vec3(float x, float y, float z) : x(x), y(y), z(z) {}
 	float x;
 	float y; 
@@ -21,6 +32,7 @@ struct vec3
 
 struct vec2
 {
+	vec2() {}
 	vec2(float x, float y) : x(x), y(y) {}
 	float x;
 	float y;
@@ -28,10 +40,19 @@ struct vec2
 
 struct Vertex
 {
+	Vertex() {}
 	Vertex(vec3 position, vec2 uv) : position(position), uv(uv) {}
 	vec3 position;
 	vec2 uv;
 };
+
+struct ComputeUploadInformation
+{
+	vec4 mouse;
+	float time;
+	vec3 _alignment;
+};
+
 int main()
 {
 	if (!glfwInit())
@@ -151,16 +172,43 @@ int main()
 		return -1;
 	}
 
+	ComputeUploadInformation computeUploadInformation = {};
+
+	D3D11_BUFFER_DESC cbDesc = {};
+	cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	cbDesc.ByteWidth = sizeof(ComputeUploadInformation);
+	cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	cbDesc.MiscFlags = 0;
+	cbDesc.StructureByteStride = 0;
+	cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+
+	ID3D11Buffer* m_computeUploadBuffer;
+	result = m_device->CreateBuffer(&cbDesc, nullptr, &m_computeUploadBuffer);
+	if (FAILED(result))
+	{
+		std::cout << "Failed to create constant buffer. " << std::endl;
+		return -1;
+	}
+	D3D11_MAPPED_SUBRESOURCE cbMappedPtr = {};
 	while (!glfwWindowShouldClose(m_window))
 	{
 		glfwPollEvents();
+		double mousex, mousey;
+		glfwGetCursorPos(m_window, &mousex,&mousey);
+		computeUploadInformation.mouse.x = mousex;
+		computeUploadInformation.mouse.y = mousey;
 
+		computeUploadInformation.time = glfwGetTime();
+		m_deviceContext->Map(m_computeUploadBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &cbMappedPtr);
+		memcpy(cbMappedPtr.pData, &computeUploadInformation, sizeof(ComputeUploadInformation));
+		m_deviceContext->Unmap(m_computeUploadBuffer, 0);
 		//Insert compute stuff here
 		m_deviceContext->CSSetShader(m_computeShader, nullptr, 0);
+		m_deviceContext->CSSetConstantBuffers(0, 1, &m_computeUploadBuffer);
 		m_deviceContext->CSSetUnorderedAccessViews(0, 1, &m_textureUAV, nullptr);
 		m_deviceContext->Dispatch(WIDTH/8, HEIGHT/8, 1);
 		m_deviceContext->CopyResource(m_backBuffer, m_texture);
-		m_swapChain->Present(1, 0);
+		m_swapChain->Present(0, 0);
 	}
 
 	m_device->Release();
