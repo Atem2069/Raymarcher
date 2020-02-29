@@ -74,9 +74,7 @@ float4x4 viewMatrix(float3 eye, float3 center, float3 up) {
 [numthreads(8,8,1)]
 void main(uint3 threadID : SV_DispatchThreadID)
 {
-	//float4 res = float4(0.392, 0.584, 0.929, 1.f);
-	float4 res = 0;
-	//float3 coord = float3(threadID) * 2.f - 600.f;
+	float4 res = float4(0.392, 0.584, 0.929, 1.f);
 	float3 origin = float3(0, 0, 5);
 	float3 ray = origin;
 	float3 dir = rayDirection(90.f, float2(WIDTH, HEIGHT), float2(threadID.xy));
@@ -90,7 +88,7 @@ void main(uint3 threadID : SV_DispatchThreadID)
 			//res = float4(threadID / 600.f, 1.f);
 			//res = float4(estimateNormal(origin), 1.f);
 			float4 light = float4(calculateLighting(ray, origin, 1.f), 1.f);
-			res += light;
+			res = light;
 			break;
 		}
 		//if (depth < 0.25 && depth > EPSILON)
